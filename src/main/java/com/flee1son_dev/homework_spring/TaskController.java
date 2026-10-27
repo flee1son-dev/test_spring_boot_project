@@ -2,10 +2,16 @@ package com.flee1son_dev.homework_spring;
 
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.persistence.EntityNotFoundException;
+
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,55 +33,89 @@ public class TaskController {
     }
     
     @GetMapping("/{id}")
-    public Task getaskById(@PathVariable("id") Long id) {
+    public ResponseEntity<Task> getTaskById(@PathVariable("id") Long id) {
         log.info("Called get task by id: id = " + id);
-        return taskService.getTaskById(id);
+        try{
+            return ResponseEntity.ok(taskService.getTaskById(id));
+        } catch(EntityNotFoundException e){
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping
-    public List<Task> getAllTasks() {
+    public ResponseEntity<List<Task>> getAllTasks() {
         log.info("Called get all tasks");
-        return taskService.findAllTasks();
+        return ResponseEntity.ok(taskService.findAllTasks());
     }
 
     @PostMapping
-    public Task createTask(
+    public ResponseEntity<Task> createTask(
         @RequestBody Task taskCreate
     ){
         log.info("Called create tasks");
-        return taskService.createTask(taskCreate);
+        return ResponseEntity.status(HttpStatus.CREATED).body(taskService.createTask(taskCreate));
     }
     
     @PutMapping("/{id}")
-    public Task updateTask(
+    public ResponseEntity<Task> updateTask(
         @PathVariable("id") long id,
         @RequestBody Task taskToUpdate
         ) {
         log.info("Called update task by id = " + id);
-        return taskService.taskUpdate(id, taskToUpdate);
+        try{
+            var updated = taskService.taskUpdate(id, taskToUpdate);
+            return ResponseEntity.ok(updated);
+        } catch(EntityNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        
     }
 
-    @PutMapping("/{id}/status")
-    public Task updateTaskStatus(
-        @PathVariable("id") Long id, 
-        @RequestBody TaskStatus status
-    ) {
-        log.info("Called update task's status by id = " + id);
-        return taskService.taskUpdateStatus(id, status);
-    }
+    // @PutMapping("/{id}/status")
+    // public Task updateTaskStatus(
+    //     @PathVariable("id") Long id, 
+    //     @RequestBody TaskStatus status
+    // ) {
+    //     log.info("Called update task's status by id = " + id);
+    //     return taskService.taskUpdateStatus(id, status);
+    // }
 
     @PutMapping("/{id}/resumption")
-    public Task resumptionTask(
+    public ResponseEntity<Task> resumptionTask(
         @PathVariable("id") Long id
     ) {
             log.info("Called resumption task by id = " + id);
-            return taskService.taskResumption(id);         
+            try{
+                var resumption = taskService.taskResumption(id);
+                return ResponseEntity.ok(resumption);
+            } catch(EntityNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
     }
 
     @DeleteMapping("/{id}/delete")
-    public void deleteTask(
+    public ResponseEntity<Void> deleteTask(
         @PathVariable("id") Long id
     ) {
-        taskService.taskDelete(id);
+        try{
+            taskService.taskDelete(id);
+            return ResponseEntity.ok().build();
+        } catch(EntityNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        
+    }
+
+    @PutMapping("/{id}/start")
+    public ResponseEntity<Task> startTask(
+        @PathVariable("id") Long id,
+        @RequestBody(required = false) Long assignedId
+    ) {
+        try{
+            var started = taskService.taskStart(id, assignedId);
+            return ResponseEntity.ok(started);
+        } catch(EntityNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
     }
 }
