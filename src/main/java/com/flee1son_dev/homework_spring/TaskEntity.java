@@ -2,6 +2,7 @@ package com.flee1son_dev.homework_spring;
 
 import java.time.LocalDate;
 
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -19,24 +20,27 @@ public class TaskEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY) 
     private Long id;
 
-    @Column(name = "creator_id")
+    @Column(name = "creator_id", nullable = false)
     private Long creatorId;
 
     @Column(name = "assigned_user_id")
     Long assignedUserId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status") 
+    @Column(name = "status", nullable = false) 
     TaskStatus status;
 
-    @Column(name = "create_date")
+    @Column(name = "create_date", nullable = false)
     LocalDate createDateTime;
 
-    @Column(name = "deadline_date")
+    @Column(name = "deadline_date", nullable = false)
     LocalDate deadlineDate;
 
+    @Column (name = "done_date")
+    LocalDate doneDate;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "priority")
+    @Column(name = "priority", nullable = false)
     TaskPriority priority;
 
     public TaskEntity(){
@@ -44,13 +48,14 @@ public class TaskEntity {
     }
 
     public TaskEntity(Long id, Long creatorId, Long assignedUserId, TaskStatus status, LocalDate createDateTime,
-            LocalDate deadlineDate, TaskPriority priority) {
+            LocalDate deadlineDate, LocalDate doneDate, TaskPriority priority) {
         this.id = id;
         this.creatorId = creatorId;
         this.assignedUserId = assignedUserId;
         this.status = status;
         this.createDateTime = createDateTime;
         this.deadlineDate = deadlineDate;
+        this.doneDate = doneDate;
         this.priority = priority;
     }
 
@@ -100,6 +105,14 @@ public class TaskEntity {
 
     public void setDeadlineDate(LocalDate deadlineDate) {
         this.deadlineDate = deadlineDate;
+    }
+
+    public LocalDate getDoneDate(){
+        return doneDate;
+    }
+
+    public void setDoneDate(LocalDate doneDate){
+        this.doneDate = doneDate;
     }
 
     public TaskPriority getPriority() {

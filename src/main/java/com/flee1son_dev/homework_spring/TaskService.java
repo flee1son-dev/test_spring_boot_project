@@ -1,19 +1,20 @@
 package com.flee1son_dev.homework_spring;
 
-import java.util.HashMap;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.concurrent.atomic.AtomicLong;
 
-import javax.naming.LimitExceededException;
 
-import org.springframework.http.ResponseEntity;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.EntityNotFoundException;
 
 @Service 
 public class TaskService {
+
+    private static final Logger log = LoggerFactory.getLogger(TaskService.class);
 
     private final TaskRepository repository;
 
@@ -34,11 +35,8 @@ public class TaskService {
     }
 
     public Task createTask(Task taskToCreate) {
-        if(taskToCreate.id() != null){
-            throw new IllegalArgumentException("Id should be empty");
-        }
-        if(taskToCreate.status() != null){
-            throw new IllegalArgumentException("Status should be empty");
+        if(!taskToCreate.deadlineDate().isAfter(taskToCreate.createDateTime())){
+            throw new IllegalArgumentException("Create date must be a 1 day earlier deadline date.");
         }
         var savedTask = new TaskEntity(
             null, 
@@ -46,7 +44,8 @@ public class TaskService {
             null, 
             TaskStatus.CREATED, 
             taskToCreate.createDateTime(), 
-            taskToCreate.deadlineDate(), 
+            taskToCreate.deadlineDate(),
+            null,
             taskToCreate.priority()
         );
         var savedEntity= repository.save(savedTask);
@@ -60,8 +59,15 @@ public class TaskService {
         
         var taskEntity = repository.findById(id)
                                     .orElseThrow(() -> new EntityNotFoundException("Not found task by id = " + id));
-        if(taskEntity.getStatus() == TaskStatus.DONE){
-            throw new IllegalArgumentException("Task status cannot be a Done");
+        
+        if(taskEntity.getStatus().equals(TaskStatus.DONE)){
+            throw new IllegalStateException("A completed task cannot be edited.");
+        }
+        if(taskEntity.getStatus().equals(TaskStatus.IN_PROGRESS)){
+            throw new IllegalStateException("A in progress task cannot be edited");
+        }
+        if(!taskToUpdate.deadlineDate().isAfter(taskEntity.getCreateDateTime())){
+            throw new IllegalArgumentException("Create date must be a 1 day earlier deadline date.");
         }
 
         var updatedTask = new TaskEntity(
@@ -70,7 +76,8 @@ public class TaskService {
             taskEntity.getAssignedUserId(),  
             taskEntity.getStatus(), 
             taskEntity.getCreateDateTime(), 
-            taskToUpdate.deadlineDate(), 
+            taskToUpdate.deadlineDate(),
+            taskEntity.getDoneDate(),
             taskToUpdate.priority()
         );
         var savedEntity = repository.save(updatedTask);
@@ -107,18 +114,10 @@ public class TaskService {
         if(taskEntity.getStatus() != TaskStatus.DONE){
             throw new IllegalStateException("The status can only be 'done'");
         }
-        var resumptionTask = new TaskEntity(
-            taskEntity.getId(), 
-            taskEntity.getCreatorId(), 
-            taskEntity.getAssignedUserId(), 
-            TaskStatus.IN_PROGRESS, 
-            taskEntity.getCreateDateTime(), 
-            taskEntity.getDeadlineDate(), 
-            taskEntity.getPriority()  
-        );
-
-        var savedEntity = repository.save(resumptionTask);
-        return toDomainTask(savedEntity);
+        
+        taskEntity.setDoneDate(null);
+        taskEntity.setStatus(TaskStatus.IN_PROGRESS);
+        return toDomainTask(repository.save(taskEntity));
     }
 
     public void taskDelete(Long id) {
@@ -134,7 +133,8 @@ public class TaskService {
             task.getAssignedUserId(), 
             task.getStatus(), 
             task.getCreateDateTime(), 
-            task.getDeadlineDate(), 
+            task.getDeadlineDate(),
+            task.getDoneDate(), 
             task.getPriority()
         );
     }
@@ -142,33 +142,24 @@ public class TaskService {
     public Task taskStart(Long id, Long assignedId) {
         var taskEntity = repository.findById(id)
                                     .orElseThrow(() -> new EntityNotFoundException("Not found task by id = " + id));
-        if (taskEntity.getStatus() != TaskStatus.CREATED){
-            throw new IllegalStateException("Incorrect task's status");
-        }
         if(assignedId == null){
-            throw new IllegalArgumentException("An assigned user is required to start the task.");
+                    throw new IllegalArgumentException("An assigned user is required to start the task.");
+                }
+
+        if (taskEntity.getStatus() != TaskStatus.CREATED){
+            throw new IllegalStateException("A completed or in progress task cannot be starting");
         }
+        
         
         if(limitAssignedTasks(id, assignedId)){
             throw new IllegalStateException("Assigned user cannot have too many tasks");
         }
 
-        var started = new TaskEntity(
-            taskEntity.getId(), 
-            taskEntity.getCreatorId(), 
-            assignedId, 
-            TaskStatus.IN_PROGRESS, 
-            taskEntity.getCreateDateTime(), 
-            taskEntity.getDeadlineDate(), 
-            taskEntity.getPriority()
-        );
-        if(started.getAssignedUserId() == null){
-            throw new IllegalStateException("Assigned user id cannot be a empty");
-        }
+        taskEntity.setStatus(TaskStatus.IN_PROGRESS);
+        taskEntity.setAssignedUserId(assignedId);
 
 
-        var savedEntity = repository.save(started);
-        return toDomainTask(savedEntity);
+        return toDomainTask(repository.save(taskEntity)) ;
     }
 
     private boolean limitAssignedTasks(Long id, Long assignedId){
@@ -184,5 +175,20 @@ public class TaskService {
                 return true;
             }
         return false;
+    }
+
+    @Transactional 
+    public void taskComplete(Long id) {
+        var taskEntity = repository.findById(id)
+                                    .orElseThrow(() -> new EntityNotFoundException("Not found task by id = " + id));
+        if(taskEntity.getStatus().equals(TaskStatus.CREATED)){
+            throw new IllegalStateException("Cannot complete created task");
+        }
+        if(taskEntity.getStatus().equals(TaskStatus.DONE)){
+            throw new IllegalStateException("Cannot complete completed task.");
+        }
+        
+        repository.setStatusToComplete(id, TaskStatus.DONE, LocalDate.now());
+        log.info("Successfully completed task: id={id}", id);
     }
 }

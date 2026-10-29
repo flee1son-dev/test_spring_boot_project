@@ -2,15 +2,13 @@ package com.flee1son_dev.homework_spring;
 
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.Valid;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,11 +33,8 @@ public class TaskController {
     @GetMapping("/{id}")
     public ResponseEntity<Task> getTaskById(@PathVariable("id") Long id) {
         log.info("Called get task by id: id = " + id);
-        try{
-            return ResponseEntity.ok(taskService.getTaskById(id));
-        } catch(EntityNotFoundException e){
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(taskService.getTaskById(id));
+
     }
 
     @GetMapping
@@ -50,7 +45,7 @@ public class TaskController {
 
     @PostMapping
     public ResponseEntity<Task> createTask(
-        @RequestBody Task taskCreate
+        @RequestBody @Valid  Task taskCreate
     ){
         log.info("Called create tasks");
         return ResponseEntity.status(HttpStatus.CREATED).body(taskService.createTask(taskCreate));
@@ -59,15 +54,12 @@ public class TaskController {
     @PutMapping("/{id}")
     public ResponseEntity<Task> updateTask(
         @PathVariable("id") long id,
-        @RequestBody Task taskToUpdate
+        @RequestBody @Valid Task taskToUpdate
         ) {
         log.info("Called update task by id = " + id);
-        try{
-            var updated = taskService.taskUpdate(id, taskToUpdate);
-            return ResponseEntity.ok(updated);
-        } catch(EntityNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        var updated = taskService.taskUpdate(id, taskToUpdate);
+        return ResponseEntity.ok(updated);
+        
         
     }
 
@@ -85,37 +77,36 @@ public class TaskController {
         @PathVariable("id") Long id
     ) {
             log.info("Called resumption task by id = " + id);
-            try{
-                var resumption = taskService.taskResumption(id);
-                return ResponseEntity.ok(resumption);
-            } catch(EntityNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
+            var resumption = taskService.taskResumption(id);
+            return ResponseEntity.ok(resumption);
+            
     }
 
     @DeleteMapping("/{id}/delete")
     public ResponseEntity<Void> deleteTask(
         @PathVariable("id") Long id
     ) {
-        try{
-            taskService.taskDelete(id);
-            return ResponseEntity.ok().build();
-        } catch(EntityNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        taskService.taskDelete(id);
+        return ResponseEntity.ok().build();
         
     }
 
-    @PutMapping("/{id}/start")
+    @PostMapping("/{id}/start")
     public ResponseEntity<Task> startTask(
         @PathVariable("id") Long id,
-        @RequestBody(required = false) Long assignedId
+        @RequestBody @Valid  Task taskToStart
     ) {
-        try{
-            var started = taskService.taskStart(id, assignedId);
-            return ResponseEntity.ok(started);
-        } catch(EntityNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        var started = taskService.taskStart(id, taskToStart.assignedUserId());
+        return ResponseEntity.status(HttpStatus.OK).body(started);
     }
+
+    @PostMapping("/{id}/complete")
+    public ResponseEntity<Void> completeTask(
+        @PathVariable("id") Long id
+    ) {
+        taskService.taskComplete(id);
+        log.info("Successfully completed task");
+        return ResponseEntity.status(HttpStatus.OK).build();
+    }
+    
 }
