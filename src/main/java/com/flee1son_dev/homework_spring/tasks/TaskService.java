@@ -1,4 +1,4 @@
-package com.flee1son_dev.homework_spring;
+package com.flee1son_dev.homework_spring.tasks;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -6,32 +6,66 @@ import java.util.List;
 
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.flee1son_dev.homework_spring.tasks.avaiability.TaskAvailabilityService;
 
 import jakarta.persistence.EntityNotFoundException;
 
 @Service 
 public class TaskService {
 
+    private final TaskController taskController;
+
     private static final Logger log = LoggerFactory.getLogger(TaskService.class);
+
+    private final TaskAvailabilityService availabilityService;
+
+    private final TaskMapper mapper;
 
     private final TaskRepository repository;
 
-    public TaskService(TaskRepository repository){
+    public TaskService(
+        TaskRepository repository, 
+        TaskMapper mapper, 
+        TaskController taskController,
+        TaskAvailabilityService avaiabilityService
+    ){
         this.repository = repository;
+        this.mapper = mapper;
+        this.taskController = taskController;
+        this.availabilityService = avaiabilityService;
     }
 
     public Task getTaskById(Long id){
         TaskEntity taskEntity = repository.findById(id)
                                             .orElseThrow(() -> new EntityNotFoundException("Not found task by id = " + id));
-        return toDomainTask(taskEntity);
+        return mapper.toDomain(taskEntity);
     }
 
-    public List<Task> findAllTasks(){
-        List<TaskEntity> allEntities = repository.findAll();
+    public List<Task> searchAllTasksByFilter(
+        TaskSearchFilter filter
+    ){
+        int pageSize = filter.pageSize() != null 
+                ? filter.pageSize() : 10;
+
+        int pageNumber = filter.pageNumber() != null
+                ? filter.pageNumber() : 0;
+
+        Pageable pageable = Pageable
+                                .ofSize(pageSize)
+                                .withPage(pageNumber);
+        
+        List<TaskEntity> allEntities = repository.searchAllByFilter(
+            filter.creatorId(),
+            filter.assignedId(),
+            pageable
+        );
+
         return allEntities.stream()
-                            .map(this::toDomainTask).toList();
+                            .map(mapper::toDomain).toList();
     }
 
     public Task createTask(Task taskToCreate) {
@@ -49,8 +83,9 @@ public class TaskService {
             taskToCreate.priority()
         );
         var savedEntity= repository.save(savedTask);
-        return toDomainTask(savedEntity);
+        return mapper.toDomain(savedEntity);
     }
+
 
     public Task taskUpdate(
         Long id,
@@ -81,30 +116,10 @@ public class TaskService {
             taskToUpdate.priority()
         );
         var savedEntity = repository.save(updatedTask);
-        return toDomainTask(savedEntity);
+        return mapper.toDomain(savedEntity);
     }
 
-    //? public Task taskUpdateStatus(Long id, TaskStatus status) { 
-    //?     if(!taskMap.containsKey(id)){
-    //?         throw new NoSuchElementException("Not found task by id = " + id);
-    //?     }
-    //?     var task = taskMap.get(id);
-    //?     if (status == task.status()){
-    //?         throw new IllegalArgumentException("The status is already " + status);
-    //?     }
-    //?     var updatedTask = new Task(
-    //?         task.id(), 
-    //?         task.creatorId(), 
-    //?         task.assignedUserId(), 
-    //?         status, 
-    //?         task.createDateTime(), 
-    //?         task.deadlineDate(), 
-    //?         task.priority()
-    //?     );
-    //?     taskMap.put(id, updatedTask);
-    //?     return updatedTask;
-    //? }
-
+    @Transactional 
     public Task taskResumption(Long id) {
 
         var taskEntity = repository.findById(id)
@@ -117,28 +132,25 @@ public class TaskService {
         
         taskEntity.setDoneDate(null);
         taskEntity.setStatus(TaskStatus.IN_PROGRESS);
-        return toDomainTask(repository.save(taskEntity));
+        var savedEntity = repository.save(taskEntity);
+        return mapper.toDomain(savedEntity);
     }
+
 
     public void taskDelete(Long id) {
         var taskEntity = repository.findById(id)
                                     .orElseThrow(() -> new EntityNotFoundException("Not found task by id = " + id));
-        repository.delete(taskEntity);
+        if(!taskEntity.getStatus().equals(TaskStatus.CREATED)){
+            throw new IllegalStateException("A task that has already been accepted or completed cannot be canceled.");
+        }
+        taskEntity.setStatus(TaskStatus.CANCELLED);
+        var savedEntity = repository.save(taskEntity);
+        log.info("Successfully cancelled task: id={}", id);
+
     }
 
-    private Task toDomainTask(TaskEntity task){
-        return new Task(
-            task.getId(), 
-            task.getCreatorId(), 
-            task.getAssignedUserId(), 
-            task.getStatus(), 
-            task.getCreateDateTime(), 
-            task.getDeadlineDate(),
-            task.getDoneDate(), 
-            task.getPriority()
-        );
-    }
-
+    
+    @Transactional
     public Task taskStart(Long id, Long assignedId) {
         var taskEntity = repository.findById(id)
                                     .orElseThrow(() -> new EntityNotFoundException("Not found task by id = " + id));
@@ -150,32 +162,20 @@ public class TaskService {
             throw new IllegalStateException("A completed or in progress task cannot be starting");
         }
         
-        
-        if(limitAssignedTasks(id, assignedId)){
+        var isAvailableToGet = availabilityService.isTaskAvailable(id, assignedId);
+        if(!isAvailableToGet){
             throw new IllegalStateException("Assigned user cannot have too many tasks");
         }
 
         taskEntity.setStatus(TaskStatus.IN_PROGRESS);
         taskEntity.setAssignedUserId(assignedId);
 
+        var savedEntity = repository.save(taskEntity);
 
-        return toDomainTask(repository.save(taskEntity)) ;
+        return mapper.toDomain(savedEntity) ;
     }
 
-    private boolean limitAssignedTasks(Long id, Long assignedId){
-        var allTasks = repository.findAll();
-        int count = 0;
-
-        for(TaskEntity existingTask : allTasks) {
-            if (existingTask.getAssignedUserId() == assignedId){
-                count++;
-            }
-        }
-        if(count >= 4){
-                return true;
-            }
-        return false;
-    }
+    
 
     @Transactional 
     public void taskComplete(Long id) {

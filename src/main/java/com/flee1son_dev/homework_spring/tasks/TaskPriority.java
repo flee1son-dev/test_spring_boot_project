@@ -1,4 +1,4 @@
-package com.flee1son_dev.homework_spring;
+package com.flee1son_dev.homework_spring.tasks;
 
 /**
  * TaskPriority

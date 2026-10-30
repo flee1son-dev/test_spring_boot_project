@@ -1,7 +1,6 @@
-package com.flee1son_dev.homework_spring;
+package com.flee1son_dev.homework_spring.tasks;
 
 import java.time.LocalDate;
-
 
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.FutureOrPresent;
@@ -25,7 +24,7 @@ public record Task(
     @NotNull @Future 
     LocalDate deadlineDate,
 
-    LocalDate doneDateTime,
+    LocalDate doneDate,
 
     @NotNull 
     TaskPriority priority

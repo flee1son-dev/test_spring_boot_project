@@ -1,4 +1,4 @@
-package com.flee1son_dev.homework_spring;
+package com.flee1son_dev.homework_spring.tasks;
 
 import org.springframework.web.bind.annotation.RestController;
 
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -38,9 +39,21 @@ public class TaskController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Task>> getAllTasks() {
+    public ResponseEntity<List<Task>> getAllTasks(
+        @RequestParam(name = "creatorId", required = false) Long creatorId,
+        @RequestParam(name = "assignedId", required = false) Long assignedId,
+        @RequestParam(name = "pageSize", required = false) Integer pageSize,
+        @RequestParam(name = "pageNumber", required = false) Integer pageNumber
+    ) {
         log.info("Called get all tasks");
-        return ResponseEntity.ok(taskService.findAllTasks());
+
+        var filter = new TaskSearchFilter(
+            creatorId, 
+            assignedId, 
+            pageSize, 
+            pageNumber
+        );
+        return ResponseEntity.ok(taskService.searchAllTasksByFilter(filter));
     }
 
     @PostMapping
